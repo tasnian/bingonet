@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>BINGO</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .container {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 2.2rem;
+    letter-spacing: 0.08em;
+    margin: 8px 0 4px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 0.95rem;
+    margin: 0 0 18px;
+    color: #000;
+  }
+  .counter {
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 14px;
+    font-size: 1rem;
+  }
+  .option-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .option {
+    border: 2px solid #000;
+    background: #fff;
+    color: #000;
+    padding: 13px 14px;
+    text-align: left;
+    font-size: 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .option.selected {
+    background: #000;
+    color: #fff;
+  }
+  .option:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  .start-btn {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    font-size: 1.15rem;
+    font-weight: bold;
+    border: 2px solid #000;
+    background: #000;
+    color: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+  }
+  .start-btn:disabled {
+    background: #fff;
+    color: #ccc;
+    border-color: #ccc;
+    cursor: not-allowed;
+  }
+  .top-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 4px;
+  }
+  .reset-btn {
+    padding: 7px 14px;
+    font-size: 0.8rem;
+    border: 1.5px solid #000;
+    background: #fff;
+    color: #000;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin: 14px 0 10px;
+  }
+  .cell {
+    aspect-ratio: 1 / 1;
+    border: 2px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 5px;
+    font-size: clamp(0.62rem, 2.6vw, 0.82rem);
+    line-height: 1.15;
+    cursor: pointer;
+    user-select: none;
+    word-break: break-word;
+    background: #fff;
+    color: #000;
+    border-radius: 4px;
+  }
+  .cell.fixed {
+    font-weight: bold;
+    border-width: 3px;
+  }
+  .cell.crossed {
+    background: #000;
+    color: #fff;
+  }
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(255,255,255,0.98);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    text-align: center;
+    padding: 20px;
+  }
+  .overlay h2 {
+    font-size: 4rem;
+    margin: 0 0 20px;
+    letter-spacing: 0.06em;
+  }
+  .overlay button {
+    padding: 12px 28px;
+    font-size: 1rem;
+    border: 2px solid #000;
+    background: #000;
+    color: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .hint {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #444;
+    margin-top: 6px;
+  }
+  .warning {
+    border: 2px solid #000;
+    background: #fff;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    border-radius: 6px;
+    margin-bottom: 14px;
+  }
+  .backup-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 14px;
+  }
+  .link-btn {
+    background: none;
+    border: none;
+    color: #000;
+    text-decoration: underline;
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 4px;
+  }
+  .restore-box {
+    margin-top: 10px;
+    display: none;
+  }
+  .restore-box.open {
+    display: block;
+  }
+  .restore-box textarea {
+    width: 100%;
+    min-height: 60px;
+    font-size: 0.85rem;
+    border: 2px solid #000;
+    border-radius: 6px;
+    padding: 8px;
+    font-family: inherit;
+    resize: vertical;
+  }
+  .restore-box button {
+    margin-top: 8px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    border: 2px solid #000;
+    background: #000;
+    color: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function () {
+  var STORAGE_KEY = "arthurBingoState_v1";
+
+  // Fixed cell sits at row 2 / col 2 (1-indexed) => zero-indexed row1,col1 => flat index 5
+  var FIXED_INDEX = 5;
+  var FIXED_LABEL = "Wish Arthur Happy Birthday!";
+
+  var QUESTIONS = [
+    { id: 1,  label: "How many siblings?" },
+    { id: 2,  label: "Favourite book" },
+    { id: 3,  label: "Fave music/genre" },
+    { id: 4,  label: "Fave video game" },
+    { id: 6,  label: "Middle name?" },
+    { id: 7,  label: "Any pets?" },
+    { id: 8,  label: "Alt career path?" },
+    { id: 9,  label: "Ever failed a course?" },
+    { id: 10, label: "Craziest thing he's done" },
+    { id: 11, label: "Take on weed legalization" },
+    { id: 12, label: "Age at first kiss" },
+    { id: 13, label: "Favourite movie" },
+    { id: 14, label: "What time he wakes up" },
+    { id: 15, label: "Breath-holding record" },
+    { id: 16, label: "His ideal expiry date" },
+    { id: 17, label: "Thought of quitting PhD?" },
+    { id: 18, label: "Biggest pet peeve" },
+    { id: 19, label: "Any phobias?" },
+    { id: 20, label: "Real thoughts on his lab" },
+    { id: 21, label: "Ever had a 'dumb' student?" },
+    { id: 22, label: "Fave leisure activity" },
+    { id: 23, label: "Why he picked prof" },
+    { id: 24, label: "Dream job as a kid" },
+    { id: 25, label: "What secretly makes his day" },
+    { id: 26, label: "Dream class to teach" },
+    { id: 27, label: "Dream travel spot" },
+    { id: 28, label: "Relive college or retire early?" },
+    { id: 29, label: "Skill to master (unrelated)" },
+    { id: 30, label: "Dinner w/ historical figure" },
+    { id: 31, label: "Nickname?" },
+    { id: 32, label: "Pineapple on pizza?" },
+    { id: 33, label: "Guilty pleasure?" }
+  ];
+
+  var REQUIRED_PICKS = 15;
+
+  var LINES = [
+    [0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15],
+    [0,4,8,12],[1,5,9,13],[2,6,10,14],[3,7,11,15],
+    [0,5,10,15],[3,6,9,12]
+  ];
+
+  var app = document.getElementById("app");
+  var selected = {}; // id -> true, used only during selection screen
+
+  function testStorage() {
+    try {
+      var k = "__storage_test__";
+      localStorage.setItem(k, "1");
+      var ok = localStorage.getItem(k) === "1";
+      localStorage.removeItem(k);
+      return ok;
+    } catch (e) { return false; }
+  }
+  var storageOK = testStorage();
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function saveState(state) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function clearState() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  }
+
+  // Manual backup: pack the whole state into a short text code the person
+  // can copy somewhere safe (Notes, a text to themself, etc.) and paste
+  // back in later if the browser never saved their progress automatically.
+  function encodeState(state) {
+    return btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+  }
+  function decodeState(code) {
+    try {
+      var json = decodeURIComponent(escape(atob(code.trim())));
+      var state = JSON.parse(json);
+      if (!state || !Array.isArray(state.layout) || !Array.isArray(state.crossed)) return null;
+      if (state.layout.length !== 16 || state.crossed.length !== 16) return null;
+      return state;
+    } catch (e) { return null; }
+  }
+  function showSaveCode(state) {
+    var code = encodeState(state);
+    window.prompt(
+      "Copy this code (tap the text, select all, copy) and save it somewhere like Notes. " +
+      "Paste it back into this page any time to restore your card:",
+      code
+    );
+  }
+
+  function shuffle(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    }
+    return a;
+  }
+
+  function init() {
+    var state = loadState();
+    if (state && state.setupComplete) {
+      renderCard(state);
+    } else {
+      renderSelection();
+    }
+  }
+
+  function renderSelection() {
+    var count = Object.keys(selected).length;
+    var html = '';
+    html += '<div class="container">';
+    html += '<h1>BINGO</h1>';
+    html += '<div class="subtitle">Tap ' + REQUIRED_PICKS + ' questions to build your card</div>';
+    html += '<div class="counter">Selected: ' + count + ' / ' + REQUIRED_PICKS + '</div>';
+    html += '<div class="option-list">';
+    QUESTIONS.forEach(function (q) {
+      var isSel = !!selected[q.id];
+      var disabled = (!isSel && count >= REQUIRED_PICKS);
+      html += '<button class="option' + (isSel ? ' selected' : '') + '" data-id="' + q.id + '"' +
+              (disabled ? ' disabled' : '') + '>' + q.label + '</button>';
+    });
+    html += '</div>';
+    html += '<button class="start-btn" id="startBtn"' + (count === REQUIRED_PICKS ? '' : ' disabled') + '>Start Game</button>';
+    html += '<div class="backup-row"><button class="link-btn" id="showRestoreBtn">Have a save code from before? Restore it</button></div>';
+    html += '<div class="restore-box" id="restoreBox">';
+    html += '<textarea id="restoreInput" placeholder="Paste your save code here"></textarea>';
+    html += '<button id="restoreBtn">Restore Card</button>';
+    html += '</div>';
+    html += '</div>';
+    app.innerHTML = html;
+
+    var opts = app.querySelectorAll('.option');
+    opts.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = parseInt(btn.getAttribute('data-id'), 10);
+        if (selected[id]) {
+          delete selected[id];
+        } else {
+          if (Object.keys(selected).length >= REQUIRED_PICKS) return;
+          selected[id] = true;
+        }
+        renderSelection();
+      });
+    });
+
+    var startBtn = document.getElementById('startBtn');
+    startBtn.addEventListener('click', function () {
+      if (Object.keys(selected).length !== REQUIRED_PICKS) return;
+      startGame(Object.keys(selected).map(function (k) { return parseInt(k, 10); }));
+    });
+
+    var showRestoreBtn = document.getElementById('showRestoreBtn');
+    var restoreBox = document.getElementById('restoreBox');
+    showRestoreBtn.addEventListener('click', function () {
+      restoreBox.classList.toggle('open');
+    });
+    document.getElementById('restoreBtn').addEventListener('click', function () {
+      var code = document.getElementById('restoreInput').value;
+      var restored = decodeState(code);
+      if (!restored) {
+        alert("That code didn't work. Double check you copied the whole thing.");
+        return;
+      }
+      restored.setupComplete = true;
+      saveState(restored);
+      renderCard(restored);
+    });
+  }
+
+  function startGame(selectedIds) {
+    var shuffled = shuffle(selectedIds);
+    var layout = new Array(16).fill(null);
+    layout[FIXED_INDEX] = { type: 'fixed', label: FIXED_LABEL };
+    var qi = 0;
+    for (var i = 0; i < 16; i++) {
+      if (i === FIXED_INDEX) continue;
+      var qid = shuffled[qi++];
+      var q = QUESTIONS.filter(function (x) { return x.id === qid; })[0];
+      layout[i] = { type: 'question', id: q.id, label: q.label };
+    }
+    var state = {
+      setupComplete: true,
+      layout: layout,
+      crossed: new Array(16).fill(false),
+      announcedLines: []
+    };
+    saveState(state);
+    renderCard(state);
+  }
+
+  function renderCard(state) {
+    var html = '';
+    html += '<div class="container">';
+    html += '<div class="top-bar"><button class="reset-btn" id="resetBtn">Reset Card</button></div>';
+    html += '<h1>BINGO</h1>';
+    if (!storageOK) {
+      html += '<div class="warning">This browser isn\'t saving progress automatically. Tap "Copy Save Code" below and paste it into Notes/Messages before you close this page — or better, open this file directly in Safari or Chrome instead of a preview window.</div>';
+    }
+    html += '<div class="grid">';
+    state.layout.forEach(function (cell, i) {
+      var isFixed = cell.type === 'fixed';
+      var isCrossed = state.crossed[i];
+      html += '<div class="cell' + (isFixed ? ' fixed' : '') + (isCrossed ? ' crossed' : '') +
+              '" data-idx="' + i + '">' + cell.label + '</div>';
+    });
+    html += '</div>';
+    html += '<div class="hint">Tap a square to cross it off</div>';
+    html += '<div class="backup-row"><button class="link-btn" id="saveCodeBtn">Copy Save Code</button></div>';
+    html += '</div>';
+    app.innerHTML = html;
+
+    app.querySelectorAll('.cell').forEach(function (cellEl) {
+      cellEl.addEventListener('click', function () {
+        var idx = parseInt(cellEl.getAttribute('data-idx'), 10);
+        state.crossed[idx] = !state.crossed[idx];
+        saveState(state);
+        checkBingo(state);
+        renderCard(state);
+      });
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', function () {
+      var ok = window.confirm('Start a brand new card? This will erase your current progress.');
+      if (ok) {
+        clearState();
+        selected = {};
+        renderSelection();
+      }
+    });
+
+    document.getElementById('saveCodeBtn').addEventListener('click', function () {
+      showSaveCode(state);
+    });
+  }
+
+  function checkBingo(state) {
+    var newlyCompleted = false;
+    LINES.forEach(function (line, lineIdx) {
+      var complete = line.every(function (i) { return state.crossed[i]; });
+      if (complete && state.announcedLines.indexOf(lineIdx) === -1) {
+        state.announcedLines.push(lineIdx);
+        newlyCompleted = true;
+      }
+    });
+    if (newlyCompleted) {
+      saveState(state);
+      showBingoPopup();
+    }
+  }
+
+  function showBingoPopup() {
+    var overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.innerHTML = '<h2>BINGO!</h2><button id="closeBingo">Close</button>';
+    document.body.appendChild(overlay);
+    function close() {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) close();
+    });
+    document.getElementById('closeBingo').addEventListener('click', close);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
